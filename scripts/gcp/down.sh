@@ -75,8 +75,17 @@ fi
 
 echo ""
 echo -e "${BOLD}Deleting Cloud Run service...${NC}"
-gcloud run services delete "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --quiet \
-    || echo -e "${DIM}Service already gone${NC}"
+# Describe-guard: a not-found here usually means a region mismatch rather than
+# a clean teardown — deleting blind would look like success while the service
+# keeps billing in the region it was actually deployed to.
+if gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" \
+    --format 'value(metadata.name)' &> /dev/null; then
+    gcloud run services delete "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --quiet
+else
+    echo -e "${BOLD}Warning:${NC} Cloud Run service ${SERVICE_NAME} not found in region ${REGION}."
+    echo -e "${DIM}  If it was deployed to another region, rerun with GCP_REGION=<actual> ./scripts/gcp/down.sh${NC}"
+    echo -e "${DIM}  Continuing: Cloud SQL and secrets are deleted by name, not region, below.${NC}"
+fi
 
 echo ""
 echo -e "${BOLD}Deleting Cloud SQL instance (takes a few minutes)...${NC}"

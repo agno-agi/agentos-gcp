@@ -66,11 +66,13 @@ persist_env_var() {
 
 # Persist a multi-line env value. Existing active KEY= blocks are removed before
 # appending the new value; commented examples are left alone as documentation.
+# The value is written quoted, matching example.env's documented PEM form so
+# every parser (docker compose env_file included) reads it as one value.
 persist_multiline_env_var() {
     local key="$1" value="$2" file="$3" tmp line skipping=0 value_part
     [[ -z "$file" ]] && return
     if [[ ! -f "$file" ]]; then
-        printf '%s=%s\n' "$key" "$value" > "$file"
+        printf '%s="%s"\n' "$key" "$value" > "$file"
         return
     fi
 
@@ -93,7 +95,7 @@ persist_multiline_env_var() {
     done < "$file"
 
     [[ -s "$tmp" ]] && printf '\n' >> "$tmp"
-    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+    printf '%s="%s"\n' "$key" "$value" >> "$tmp"
     cat "$tmp" > "$file"
     rm -f "$tmp"
 }
@@ -275,7 +277,6 @@ echo -e "${DIM}--edition=enterprise is load-bearing: PG16+ defaults to Enterpris
 echo -e "${DIM}whose cheapest machines cost hundreds of \$/mo; the shared-core db-g1-small${NC}"
 echo -e "${DIM}(~\$25-35/mo) exists only in Enterprise. Takes 5-10 minutes.${NC}"
 echo ""
-DB_PASSWORD="$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 24)"
 if gcloud sql instances describe "$SQL_INSTANCE" --project "$PROJECT_ID" &> /dev/null; then
     echo -e "${DIM}Instance ${SQL_INSTANCE} already exists — reusing${NC}"
 else
@@ -290,9 +291,14 @@ else
 fi
 gcloud sql databases create ai --instance "$SQL_INSTANCE" --project "$PROJECT_ID" 2> /dev/null \
     || echo -e "${DIM}Database ai already exists${NC}"
+# Generate a password only when creating the user. Rotating on every run
+# would strand the live service on the old password in the window between
+# set-password and the deploy that ships the new secret version.
+DB_PASSWORD=""
 if gcloud sql users list --instance "$SQL_INSTANCE" --project "$PROJECT_ID" --format='value(name)' | grep -qx ai; then
-    gcloud sql users set-password ai --instance "$SQL_INSTANCE" --project "$PROJECT_ID" --password "$DB_PASSWORD"
+    echo -e "${DIM}Existing DB user ai — password unchanged (rotate manually if needed)${NC}"
 else
+    DB_PASSWORD="$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 24)"
     gcloud sql users create ai --instance "$SQL_INSTANCE" --project "$PROJECT_ID" --password "$DB_PASSWORD"
 fi
 DB_PRIVATE_IP="$(gcloud sql instances describe "$SQL_INSTANCE" --project "$PROJECT_ID" \
@@ -302,7 +308,9 @@ echo -e "${DIM}Cloud SQL private IP: ${DB_PRIVATE_IP}${NC}"
 echo ""
 echo -e "${BOLD}Storing secrets in Secret Manager...${NC}"
 put_secret openai-api-key "$OPENAI_API_KEY"
-put_secret db-pass "$DB_PASSWORD"
+# db-pass only gets a new version when the user was just created; on the
+# reuse path the secret from the first run keeps serving the live service.
+[[ -n "$DB_PASSWORD" ]] && put_secret db-pass "$DB_PASSWORD"
 SET_SECRETS="OPENAI_API_KEY=openai-api-key:latest,DB_PASS=db-pass:latest"
 if [[ -n "$PARALLEL_API_KEY" ]]; then
     put_secret parallel-api-key "$PARALLEL_API_KEY"
@@ -329,6 +337,16 @@ echo -e "${BOLD}Deploying to Cloud Run...${NC}"
 echo -e "${DIM}--no-cpu-throttling is load-bearing: with request-based billing, idle CPU${NC}"
 echo -e "${DIM}is throttled and the in-process scheduler + MCP streams die quietly.${NC}"
 echo ""
+# --set-env-vars/--set-secrets are replace-all: on an existing service they
+# would silently drop everything env-sync.sh pushed since the first deploy.
+# Re-runs therefore switch to the merge forms (--update-*); first runs keep
+# the --set-* forms, where the two are identical because nothing exists yet.
+if gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" \
+    --format 'value(metadata.name)' &> /dev/null; then
+    DEPLOY_ENV_ARGS=(--update-secrets "$SET_SECRETS" --update-env-vars "$ENV_VARS")
+else
+    DEPLOY_ENV_ARGS=(--set-secrets "$SET_SECRETS" --set-env-vars "$ENV_VARS")
+fi
 gcloud run deploy "$SERVICE_NAME" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
@@ -342,8 +360,7 @@ gcloud run deploy "$SERVICE_NAME" \
     --network default \
     --subnet default \
     --vpc-egress private-ranges-only \
-    --set-secrets "$SET_SECRETS" \
-    --set-env-vars "$ENV_VARS"
+    "${DEPLOY_ENV_ARGS[@]}"
 
 APP_URL="$(gcloud run services describe "$SERVICE_NAME" \
     --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
