@@ -1,10 +1,10 @@
-# AgentOS — Railway template
+# AgentOS — Google Cloud template
 
 This file is the source of truth for any agent (Claude Code, Codex, others) working in this repo. `CLAUDE.md` is a symlink to this file — edit one, both update.
 
 ## Project Overview
 
-**AgentOS — the agent backend for every frontend.** An agent server built on [Agno](https://docs.agno.com) that attaches to any client: **REST** for programmatic use, **chat interfaces** for humans (Slack is wired in; WhatsApp/Telegram/Discord mirror the same pattern), and **MCP** at `/mcp` for AI apps (claude.ai, ChatGPT, Cursor, Claude Code) — which work *through* the platform, not just on it. The repo itself is designed for coding agents to build and extend. Two flagship agents — Agent Builder (creates agents, teams, and workflows) and Platform Manager (understands, monitors, and explains the platform) — plus WebSearch as the simplest sample agent to copy. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Runs locally via Docker; this template deploys to Railway with a single script and is the reference sibling of the `agentos-*` deployment family — see [Portable core vs. deploy layer](#portable-core-vs-deploy-layer).
+**AgentOS — the agent backend for every frontend.** An agent server built on [Agno](https://docs.agno.com) that attaches to any client: **REST** for programmatic use, **chat interfaces** for humans (Slack is wired in; WhatsApp/Telegram/Discord mirror the same pattern), and **MCP** at `/mcp` for AI apps (claude.ai, ChatGPT, Cursor, Claude Code) — which work *through* the platform, not just on it. The repo itself is designed for coding agents to build and extend. Two flagship agents — Agent Builder (creates agents, teams, and workflows) and Platform Manager (understands, monitors, and explains the platform) — plus WebSearch as the simplest sample agent to copy. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Runs locally via Docker; this template deploys to Google Cloud Run with a single script and is the GCP sibling of the `agentos-*` deployment family — see [Portable core vs. deploy layer](#portable-core-vs-deploy-layer).
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Shared:
 | [`.agents/skills/`](.agents/skills/) | Dev-time **coding-agent workflows** (`create-new-agent`, `extend-agent`, `improve-agent`, `eval-and-improve`, `review-and-improve`) — slash commands coding agents run *on this repo*. `.claude/skills` is a committed symlink into it — see [Working with coding agents](#working-with-coding-agents). |
 | [`README.md`](README.md) | Public entry point — leads with the copy-paste setup prompt that takes a coding agent from clone to connected. |
 | [`compose.yaml`](compose.yaml) | Docker Compose for local development. |
-| [`railway.json`](railway.json) | Railway deploy config (Docker + 1 replica + 4Gi/2vCPU). |
+| [`scripts/gcp/`](scripts/gcp/) | GCP deploy layer — up.sh provisions Artifact Registry + Cloud SQL (private IP) + Secret Manager + Cloud Run at 2 vCPU/4 GiB min-1 no-cpu-throttling; env-sync/redeploy/down manage the lifecycle. |
 
 ## Development Setup
 
@@ -187,10 +187,10 @@ Invoke a skill by name (`/extend-agent`) or just describe the task — Claude Co
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `OPENAI_API_KEY` | yes | — | OpenAI key for models + embeddings. |
-| `RUNTIME_ENV` | no | `prd` | `dev` disables JWT. Compose sets this to `dev` for local — never put it in an env file that syncs to Railway, or production deploys unauthenticated. |
+| `RUNTIME_ENV` | no | `prd` | `dev` disables JWT. Compose sets this to `dev` for local — never put `dev` in an env file that env-sync.sh pushes to Cloud Run, or production serves unauthenticated. |
 | `JWT_VERIFICATION_KEY` | prd | — | Public key from os.agno.com. Required when `RUNTIME_ENV=prd` and `authorization=True`, unless `JWT_JWKS_FILE` is set. |
 | `JWT_JWKS_FILE` | prd | — | Path to a JWKS file; alternative to `JWT_VERIFICATION_KEY` for production JWT verification. |
-| `AGENTOS_URL` | no | `http://127.0.0.1:8000` | Scheduler base URL — cron triggers reach AgentOS over this. `scripts/railway/up.sh` auto-sets it to the created Railway domain (and writes it back into your env file); only set it by hand for custom domains or tunnels. Left at the localhost default in prod, scheduled jobs silently never fire. |
+| `AGENTOS_URL` | no | `http://127.0.0.1:8000` | Scheduler base URL — cron triggers reach AgentOS over this. `scripts/gcp/up.sh` sets it to the Cloud Run URL right after the first deploy (a second revision — Cloud Run only reveals the URL post-deploy) and writes it back into your env file. Left at the localhost default in prod, scheduled jobs silently never fire. |
 | `ENABLE_DEPLOY_CHECK` | no | `True` | The reference deployment-check cron (`app/schedules.py`) runs daily by default. Set `False` to disable; the workflow stays runnable on demand regardless. |
 | `ENABLE_SCHEDULED_EVALS` | no | `False` | If `True`, schedules the run-evals workflow daily. Off by default because it uses model calls. |
 | `EVALS_TAG` | no | `smoke` | Eval tag run by the run-evals workflow. |
@@ -245,29 +245,29 @@ For Discord, Telegram, WhatsApp, and custom UIs, mirror the Slack conditional pa
 
 ## Portable core vs. deploy layer
 
-This repo is the Railway sibling of the `agentos-*` deployment family (agentos-docker, agentos-aws, agentos-fly, agentos-gcp, agentos-azure, agentos-modal). Everything that defines the platform is **portable core — identical across the family**: `agents/`, `app/`, `db/`, `workflows/`, `evals/`, the MCP server wiring, the interfaces, and the coding-agent skills in `.agents/skills/`. `Dockerfile`, `compose.yaml`, and `scripts/entrypoint.sh` are shared local-dev/runtime infra, also not deployment-specific.
+This repo is the Google Cloud sibling of the `agentos-*` deployment family ([agentos-railway](https://github.com/agno-agi/agentos-railway) is the reference; agentos-docker is the self-hosted sibling; agentos-aws, agentos-fly, agentos-azure, agentos-modal cover the other clouds). Everything that defines the platform is **portable core — identical across the family**: `agents/`, `app/`, `db/`, `workflows/`, `evals/`, the MCP server wiring, the interfaces, and the coding-agent skills in `.agents/skills/`. `Dockerfile`, `compose.yaml`, and `scripts/entrypoint.sh` are shared local-dev/runtime infra, also not deployment-specific.
 
-The **Railway-specific deploy layer** — what a sibling template swaps out — is exactly:
+The **GCP-specific deploy layer** — what a sibling template swaps out — is exactly:
 
-- [`railway.json`](railway.json)
-- [`scripts/railway/`](scripts/railway/) (`up.sh`, `env-sync.sh`, `redeploy.sh`)
-- the "Deploying to Railway" prose here and in the README
+- [`scripts/gcp/`](scripts/gcp/) (`up.sh`, `env-sync.sh`, `redeploy.sh`, `down.sh`)
+- the "Deploying to Google Cloud Run" prose here and in the README
 
-When editing, keep that boundary crisp: platform behavior belongs in the core, Railway mechanics belong in the deploy layer, and nothing in the core should import from or depend on it.
+When editing, keep that boundary crisp: platform behavior belongs in the core, GCP mechanics belong in the deploy layer, and nothing in the core should import from or depend on it.
 
-## Deploying to Railway
+## Deploying to Google Cloud Run
 
 ```bash
-./scripts/railway/up.sh        # provision Postgres + agent-os service
-./scripts/railway/env-sync.sh  # sync .env.production (default) or .env
-./scripts/railway/redeploy.sh  # redeploy after code changes
+./scripts/gcp/up.sh        # first-time provisioning: registry + Cloud SQL + secrets + Cloud Run
+./scripts/gcp/env-sync.sh  # sync .env.production (default) or a given env file
+./scripts/gcp/redeploy.sh  # rebuild + push the image, roll the service
+./scripts/gcp/down.sh      # teardown (asks for confirmation; --yes to skip)
 ```
 
-`up.sh` creates the domain before deploying and sets `AGENTOS_URL` to it (on Railway and in your env file), so the scheduler is reachable in prod out of the box.
+`up.sh` enables the required APIs, creates an Artifact Registry repo and pushes a locally-built `linux/amd64` image to it, provisions Cloud SQL Postgres 17 on a **private IP** via one-time VPC peering (~5 minutes on first run), stores keys in Secret Manager, and deploys Cloud Run at 2 vCPU / 4 GiB with `--min-instances 1` and `--no-cpu-throttling`. Two flags are load-bearing: `--no-cpu-throttling` (request-based billing throttles idle CPU and the in-process scheduler + MCP streams die quietly) and Cloud SQL `--edition=enterprise` (PG16+ defaults to Enterprise Plus, whose cheapest machines cost hundreds of $/mo; the ~$25-35/mo db-g1-small exists only in Enterprise). After the first deploy, the script sets `AGENTOS_URL` to the Cloud Run URL in a second revision — Cloud Run only reveals the URL post-deploy — and writes it back into your env file, so the scheduler is reachable in prod out of the box.
 
-JWT auth is on by default. After creating the Railway domain, `up.sh` pauses if `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE` is missing, so you can connect the OS at os.agno.com (Connect OS → Live, name it `Live AgentOS`, then Settings → OS & Security → Token-Based Authorization (JWT)), paste the full PEM into the prompt, and let the script save it to the env file. Live AgentOS Connections are a paid feature; use `PLATFORM30` to get 1 month off. The script re-reads the env file and pushes the key before the first deploy. If you skip the prompt or run non-interactively, add the key later and run `./scripts/railway/env-sync.sh`.
+JWT auth is on by default. Once the Cloud Run URL exists, `up.sh` pauses if `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE` is missing, so you can connect the OS at os.agno.com (Connect OS → Live with the Cloud Run URL, name it `Live AgentOS`, then Settings → OS & Security → Token-Based Authorization (JWT)), paste the full PEM at the prompt, and let the script save it to the env file. Live AgentOS Connections are a paid feature; use `PLATFORM30` to get 1 month off. The key lands in Secret Manager, not a plain env var. If you skip the prompt or run non-interactively, add the key to the env file later and run `./scripts/gcp/env-sync.sh`.
 
-The Railway *project* is `agentos-railway`; the app *service* is `agent-os`.
+Config comes from `GCP_PROJECT_ID` / `GCP_REGION` (default: the current gcloud project, `us-central1`); the Cloud Run *service* is `agent-os`.
 
 ## Common Tasks
 
@@ -286,8 +286,8 @@ docker compose up -d --build
 # Build a multi-arch image (maintainer-only)
 ./scripts/build_image.sh
 
-# Tail Railway logs
-railway logs --service agent-os
+# Tail Cloud Run logs
+gcloud run services logs read agent-os --region us-central1 --limit 100
 ```
 
 ## Documentation Links
