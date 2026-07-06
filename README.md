@@ -136,10 +136,12 @@ During `./scripts/gcp/up.sh`, the script deploys the service first — Cloud Run
 6. Paste the full public key into the `up.sh` prompt. The script saves it into your env file for future syncs — and pushes it to the service through Secret Manager, not a plain env var:
 
 ```sh
-JWT_VERIFICATION_KEY=-----BEGIN PUBLIC KEY-----
+JWT_VERIFICATION_KEY="-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkq...
------END PUBLIC KEY-----
+-----END PUBLIC KEY-----"
 ```
+
+The value is quoted so every parser — docker compose `env_file` included — reads the multi-line PEM as one variable.
 
 > **Heads up.** Live AgentOS Connections are a paid feature. Use `PLATFORM30` to get 1 month off. We are working on a free trial so you don't have to pay to try.
 
