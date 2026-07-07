@@ -246,10 +246,38 @@ gcloud services enable \
 
 echo ""
 echo -e "${BOLD}Creating Artifact Registry repo...${NC}"
-gcloud artifacts repositories create "$AR_REPO" \
-    --project "$PROJECT_ID" \
-    --repository-format=docker \
-    --location "$REGION" 2> /dev/null || echo -e "${DIM}Repo already exists${NC}"
+# Describe-guard + retry — replaces a bare
+# `create … 2>/dev/null || echo "Repo already exists"`, which had two bugs:
+#   1) Masking: `|| echo` mapped ANY create failure to a benign "already exists"
+#      message, so set -e never fired and the run died far downstream at
+#      `docker push` with a cryptic "Repository not found".
+#   2) Propagation race: the create can be rejected in the seconds right after
+#      `gcloud services enable artifactregistry.googleapis.com` (the freshly
+#      enabled API isn't consistent yet) — a short retry rides it out.
+# Only skip when the repo genuinely exists; a real create error aborts (set -e).
+if gcloud artifacts repositories describe "$AR_REPO" \
+    --project "$PROJECT_ID" --location "$REGION" &> /dev/null; then
+    echo -e "${DIM}Repo already exists${NC}"
+else
+    for attempt in 1 2 3 4 5; do
+        if gcloud artifacts repositories create "$AR_REPO" \
+            --project "$PROJECT_ID" --repository-format=docker --location "$REGION"; then
+            break
+        fi
+        # A concurrent create — or the API just becoming consistent — may have
+        # made it exist between attempts; accept that and move on.
+        if gcloud artifacts repositories describe "$AR_REPO" \
+            --project "$PROJECT_ID" --location "$REGION" &> /dev/null; then
+            break
+        fi
+        if [[ "$attempt" -eq 5 ]]; then
+            echo "Failed to create Artifact Registry repo '${AR_REPO}' after 5 attempts." >&2
+            exit 1
+        fi
+        echo -e "${DIM}Repo create failed (artifactregistry API may still be enabling) — retry ${attempt}/5 in 15s...${NC}"
+        sleep 15
+    done
+fi
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 echo ""
@@ -364,6 +392,29 @@ gcloud run deploy "$SERVICE_NAME" \
 
 APP_URL="$(gcloud run services describe "$SERVICE_NAME" \
     --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+
+# --allow-unauthenticated adds allUsers as run.invoker. Under a Domain Restricted
+# Sharing org policy (constraints/iam.allowedPolicyMemberDomains) that binding is
+# silently rejected — gcloud only prints a warning, the deploy still "succeeds",
+# and the service ships PRIVATE: every unauthenticated request gets HTTP 403.
+# Detect it and say so loudly instead of finishing with a misleading "Done".
+# Read the policy once. Only warn when the read SUCCEEDED but allUsers is absent
+# — otherwise a transient IAM read failure (or a caller lacking
+# run.services.getIamPolicy) would cry wolf on a service that is actually public.
+if IAM_MEMBERS="$(gcloud run services get-iam-policy "$SERVICE_NAME" \
+    --project "$PROJECT_ID" --region "$REGION" \
+    --format='value(bindings.members)' 2> /dev/null)" \
+    && ! grep -q 'allUsers' <<< "$IAM_MEMBERS"; then
+    echo ""
+    echo -e "${BOLD}Warning: the service is NOT publicly reachable.${NC}"
+    echo -e "${DIM}  --allow-unauthenticated could not grant allUsers run.invoker — this${NC}"
+    echo -e "${DIM}  project's org likely enforces Domain Restricted Sharing${NC}"
+    echo -e "${DIM}  (constraints/iam.allowedPolicyMemberDomains). Unauthenticated requests${NC}"
+    echo -e "${DIM}  get HTTP 403. To expose the service, grant run.invoker to specific${NC}"
+    echo -e "${DIM}  principals, or ask an org admin for an allUsers exception:${NC}"
+    echo -e "${DIM}    gcloud run services add-iam-policy-binding ${SERVICE_NAME} --region ${REGION} \\${NC}"
+    echo -e "${DIM}      --member=user:YOU@YOUR-DOMAIN --role=roles/run.invoker${NC}"
+fi
 
 AUTH_REQUIRES_JWT=1
 [[ "${RUNTIME_ENV:-prd}" == "dev" ]] && AUTH_REQUIRES_JWT=""
