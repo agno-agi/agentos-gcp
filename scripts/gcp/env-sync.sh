@@ -10,9 +10,10 @@
 #
 #    Reads the file and pushes every variable to the Cloud Run service in
 #    one update (one new revision). Secret-shaped keys (API keys, DB_PASS,
-#    JWT_VERIFICATION_KEY, Slack credentials) go to Secret Manager; the
-#    rest become plain env vars. Multi-line values (e.g. PEM-formatted
-#    JWT_VERIFICATION_KEY) are handled correctly.
+#    JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET, AGENTOS_MCP_SIGNING_KEY,
+#    Slack credentials) go to Secret Manager; the rest become plain env
+#    vars. Multi-line values (e.g. PEM-formatted JWT_VERIFICATION_KEY) are
+#    handled correctly.
 #
 #    Overrides: GCP_PROJECT_ID (default: current gcloud project),
 #               GCP_REGION (default: us-central1)
@@ -22,6 +23,7 @@
 set -e
 
 # Colors
+ORANGE='\033[38;5;208m'
 DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -58,7 +60,7 @@ RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 # Keys that must live in Secret Manager rather than plain env vars.
 is_secret_key() {
     case "$1" in
-        OPENAI_API_KEY|DB_PASS|JWT_VERIFICATION_KEY|PARALLEL_API_KEY|SLACK_BOT_TOKEN|SLACK_SIGNING_SECRET) return 0 ;;
+        OPENAI_API_KEY|DB_PASS|JWT_VERIFICATION_KEY|MCP_CONNECT_SECRET|AGENTOS_MCP_SIGNING_KEY|PARALLEL_API_KEY|SLACK_BOT_TOKEN|SLACK_SIGNING_SECRET) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -84,7 +86,9 @@ put_secret() {
 }
 
 echo ""
-echo -e "${BOLD}Syncing env vars from ${ENV_FILE} to Cloud Run service ${SERVICE_NAME}...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Syncing env vars${NC}"
+echo ""
+echo -e "${DIM}> ${ENV_FILE} -> Cloud Run service ${SERVICE_NAME}${NC}"
 echo ""
 
 # Parse the env file, treating PEM blocks (and other multiline values)
