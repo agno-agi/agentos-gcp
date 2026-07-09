@@ -18,6 +18,8 @@
 #    Provisions: Artifact Registry repo, Cloud SQL Postgres 17 (private IP,
 #    pgvector via the app's CREATE EXTENSION), Secret Manager secrets, and
 #    a Cloud Run service at 2 vCPU / 4 GiB with min 1 always-on instance.
+#    Generates MCP_CONNECT_SECRET (chat-app OAuth) into the env file when
+#    missing, delivering it to the service via Secret Manager.
 #
 #    Overrides: GCP_PROJECT_ID (default: current gcloud project),
 #               GCP_REGION (default: us-central1)
@@ -234,7 +236,7 @@ echo ""
 echo -e "${BOLD}Project ${PROJECT_ID}, region ${REGION}${NC}"
 
 echo ""
-echo -e "${BOLD}Enabling APIs (no-op if already on)...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Enabling APIs (no-op if already on)${NC}"
 gcloud services enable \
     run.googleapis.com \
     sqladmin.googleapis.com \
@@ -245,7 +247,7 @@ gcloud services enable \
     --project "$PROJECT_ID"
 
 echo ""
-echo -e "${BOLD}Creating Artifact Registry repo...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Creating Artifact Registry repo${NC}"
 # Describe-guard + retry — replaces a bare
 # `create … 2>/dev/null || echo "Repo already exists"`, which had two bugs:
 #   1) Masking: `|| echo` mapped ANY create failure to a benign "already exists"
@@ -281,13 +283,13 @@ fi
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 echo ""
-echo -e "${BOLD}Building and pushing image (linux/amd64)...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Building and pushing image (linux/amd64)${NC}"
 echo ""
 docker build --platform linux/amd64 -t "$IMAGE" .
 docker push "$IMAGE"
 
 echo ""
-echo -e "${BOLD}Setting up private networking for Cloud SQL...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Setting up private networking for Cloud SQL${NC}"
 echo -e "${DIM}One-time per VPC; the peering step can take ~5 minutes on first run.${NC}"
 gcloud compute addresses create google-managed-services-default \
     --project "$PROJECT_ID" \
@@ -300,7 +302,7 @@ gcloud services vpc-peerings connect \
     --network=default 2> /dev/null || echo -e "${DIM}Peering already connected${NC}"
 
 echo ""
-echo -e "${BOLD}Creating Cloud SQL Postgres 17 (private IP)...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Creating Cloud SQL Postgres 17 (private IP)${NC}"
 echo -e "${DIM}--edition=enterprise is load-bearing: PG16+ defaults to Enterprise Plus,${NC}"
 echo -e "${DIM}whose cheapest machines cost hundreds of \$/mo; the shared-core db-g1-small${NC}"
 echo -e "${DIM}(~\$25-35/mo) exists only in Enterprise. Takes 5-10 minutes.${NC}"
@@ -334,7 +336,7 @@ DB_PRIVATE_IP="$(gcloud sql instances describe "$SQL_INSTANCE" --project "$PROJE
 echo -e "${DIM}Cloud SQL private IP: ${DB_PRIVATE_IP}${NC}"
 
 echo ""
-echo -e "${BOLD}Storing secrets in Secret Manager...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Storing secrets in Secret Manager${NC}"
 put_secret openai-api-key "$OPENAI_API_KEY"
 # db-pass only gets a new version when the user was just created; on the
 # reuse path the secret from the first run keeps serving the live service.
@@ -361,7 +363,7 @@ ENV_VARS="DB_HOST=${DB_PRIVATE_IP},DB_PORT=5432,DB_USER=ai,DB_DATABASE=ai,DB_DRI
 [[ -n "$RUNTIME_ENV" ]] && ENV_VARS="${ENV_VARS},RUNTIME_ENV=${RUNTIME_ENV}"
 
 echo ""
-echo -e "${BOLD}Deploying to Cloud Run...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Deploying to Cloud Run${NC}"
 echo -e "${DIM}--no-cpu-throttling is load-bearing: with request-based billing, idle CPU${NC}"
 echo -e "${DIM}is throttled and the in-process scheduler + MCP streams die quietly.${NC}"
 echo ""
@@ -424,7 +426,7 @@ AUTH_REQUIRES_JWT=1
 # mint the key against it before the AGENTOS_URL revision below.
 if [[ -n "$AUTH_REQUIRES_JWT" && -z "$JWT_VERIFICATION_KEY" && -z "$JWT_JWKS_FILE" && -t 0 ]]; then
     echo ""
-    echo -e "${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't serve production traffic without auth."
+    echo -e "${ORANGE}▸${NC} ${BOLD}JWT_VERIFICATION_KEY not set${NC} — AgentOS won't serve production traffic without auth."
     echo -e "  1. Open ${BOLD}https://os.agno.com${NC} -> Connect OS -> Live -> enter ${APP_URL:-your Cloud Run URL}"
     echo -e "  2. Name it ${BOLD}Live AgentOS${NC}"
     echo -e "  3. Note: Live AgentOS Connections are a paid feature; use ${BOLD}PLATFORM30${NC} to get 1 month off"
@@ -469,15 +471,34 @@ fi
 # The scheduler reaches AgentOS over its public URL. Without AGENTOS_URL it
 # defaults to http://127.0.0.1:8000, so scheduled jobs silently never fire in
 # prod. Cloud Run only reveals the URL after the first deploy, so this is a
-# second revision; the JWT key (when present) rides along in the same update.
+# second revision; the JWT key and MCP connect secret (when present) ride
+# along in the same update.
 if [[ -n "$APP_URL" ]]; then
+    # MCP OAuth — claude.ai and ChatGPT (web) connect over OAuth only, and the
+    # consent page is gated by MCP_CONNECT_SECRET, so the user must create the secret manually.
+    # We generate a secret on behalf of the user when the env file doesn't have one
+    if [[ -z "$MCP_CONNECT_SECRET" ]]; then
+        MCP_CONNECT_SECRET="$(openssl rand -base64 32)"
+        export MCP_CONNECT_SECRET
+        ENV_FILE="${ENV_FILE:-.env.production}"
+        [[ -f "$ENV_FILE" ]] || : > "$ENV_FILE"
+        persist_env_var MCP_CONNECT_SECRET "$MCP_CONNECT_SECRET" "$ENV_FILE"
+        echo ""
+        echo -e "${DIM}Generated MCP_CONNECT_SECRET -> ${ENV_FILE} + Secret Manager (shown in the summary below)${NC}"
+    fi
     echo ""
-    echo -e "${BOLD}Setting AGENTOS_URL (revision 2)...${NC}"
+    echo -e "${DIM}Storing MCP_CONNECT_SECRET in Secret Manager${NC}"
+    put_secret mcp-connect-secret "$MCP_CONNECT_SECRET"
+    MCP_UPDATE_ARGS=(--update-secrets "MCP_CONNECT_SECRET=mcp-connect-secret:latest")
+
+    echo ""
+    echo -e "${ORANGE}▸${NC} ${BOLD}Setting AGENTOS_URL (revision 2)${NC}"
     gcloud run services update "$SERVICE_NAME" \
         --project "$PROJECT_ID" \
         --region "$REGION" \
         --update-env-vars "AGENTOS_URL=${APP_URL}" \
-        "${JWT_UPDATE_ARGS[@]}"
+        "${JWT_UPDATE_ARGS[@]}" \
+        "${MCP_UPDATE_ARGS[@]}"
     persist_env_var AGENTOS_URL "$APP_URL" "$ENV_FILE"
     echo -e "${DIM}Set AGENTOS_URL=${APP_URL} (Cloud Run${ENV_FILE:+ + ${ENV_FILE}})${NC}"
 else
@@ -494,8 +515,14 @@ echo ""
 echo -e "${BOLD}Done.${NC}"
 echo -e "${DIM}URL:            ${APP_URL}${NC}"
 echo -e "${DIM}Logs:           gcloud run services logs read ${SERVICE_NAME} --limit 100 --project ${PROJECT_ID} --region ${REGION}${NC}"
-echo -e "${DIM}Sync env vars:  ./scripts/gcp/env-sync.sh  (defaults to .env.production)${NC}"
-[[ -n "$APP_URL" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url ${APP_URL}  (Claude Desktop + coding agents; mints a service-account token — see README)${NC}"
+echo -e "${DIM}Sync env vars:  ./scripts/gcp/env-sync.sh${NC}"
+[[ -n "$APP_URL" ]] && echo -e "${DIM}Connect apps:   uvx agno connect --url ${APP_URL}${NC}"
+if [[ -n "$APP_URL" && -n "$MCP_CONNECT_SECRET" ]]; then
+    echo -e "${DIM}Chat apps:      add ${APP_URL}/mcp as a custom connector in claude.ai / ChatGPT${NC}"
+    echo -e "${DIM}                (leave the optional OAuth client ID/secret fields empty).${NC}"
+    echo -e "${DIM}                Then click Connect and approve the consent page with this secret:${NC}"
+    echo -e "${BOLD}                ${MCP_CONNECT_SECRET}${NC}"
+fi
 echo -e "${DIM}Teardown:       ./scripts/gcp/down.sh${NC}"
 echo -e "${DIM}Cost:           ~\$110/mo Cloud Run (2 vCPU/4GiB always-on, list) + ~\$25-35/mo${NC}"
 echo -e "${DIM}                Cloud SQL db-g1-small — see the README cost note for the budget knob.${NC}"

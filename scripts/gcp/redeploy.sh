@@ -19,6 +19,7 @@
 set -e
 
 # Colors
+ORANGE='\033[38;5;208m'
 DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -52,13 +53,15 @@ fi
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE_NAME}:latest"
 
 echo ""
-echo -e "${BOLD}Building and pushing image (linux/amd64)...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Building and pushing image (linux/amd64)${NC}"
 echo ""
 docker build --platform linux/amd64 -t "$IMAGE" .
 docker push "$IMAGE"
 
 echo ""
-echo -e "${BOLD}Rolling ${SERVICE_NAME} to the new image...${NC}"
+echo -e "${ORANGE}▸${NC} ${BOLD}Rolling ${SERVICE_NAME} to the new image${NC}"
+echo ""
+echo -e "${DIM}> gcloud run deploy ${SERVICE_NAME} --region ${REGION} --image ${IMAGE}${NC}"
 echo ""
 gcloud run deploy "$SERVICE_NAME" \
     --project "$PROJECT_ID" \
