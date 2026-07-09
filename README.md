@@ -195,7 +195,7 @@ It pushes every variable from `.env.production` (or an env file you pass as an a
 ./scripts/gcp/down.sh
 ```
 
-Deletes the Cloud Run service, the Cloud SQL instance (all data), the Artifact Registry repo, and the Secret Manager secrets created by `up.sh`. The one-time VPC peering is kept — it's shared per-VPC infrastructure and costs nothing while unused.
+Deletes the Cloud Run service, the Cloud SQL instance (all data), the Artifact Registry repo, and the Secret Manager secrets created by `up.sh` / `env-sync.sh`. The one-time VPC peering is kept — it's shared per-VPC infrastructure and costs nothing while unused.
 
 ### Opting out of JWT (not recommended)
 
