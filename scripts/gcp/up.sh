@@ -464,7 +464,7 @@ elif [[ -n "$JWT_JWKS_FILE" ]]; then
     JWT_UPDATE_ARGS=(--update-env-vars "JWT_JWKS_FILE=${JWT_JWKS_FILE}")
 elif [[ -n "$AUTH_REQUIRES_JWT" ]]; then
     echo ""
-    echo -e "${DIM}Deployed without JWT auth config — the app will refuse traffic until${NC}"
+    echo -e "${DIM}Deploying without JWT auth config — the container exits on boot and the Cloud Run revision fails to start until${NC}"
     echo -e "${DIM}you add JWT_VERIFICATION_KEY or JWT_JWKS_FILE to ${ENV_FILE:-.env.production} and run ./scripts/gcp/env-sync.sh.${NC}"
 fi
 
