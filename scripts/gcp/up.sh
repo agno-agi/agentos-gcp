@@ -13,7 +13,8 @@
 #      - gcloud CLI installed and authenticated (`gcloud auth login`)
 #      - A project selected (`gcloud config set project <id>`) with billing
 #      - Docker running (the image is built locally and pushed)
-#      - OPENAI_API_KEY set in environment (or .env / .env.production)
+#      - OPENAI_API_KEY set in environment (or .env / .env.production);
+#        ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN there too for Claude Engineer
 #
 #    Provisions: Artifact Registry repo, Cloud SQL Postgres 17 (private IP,
 #    pgvector via the app's CREATE EXTENSION), Secret Manager secrets, and
@@ -204,10 +205,12 @@ if ! command -v docker &> /dev/null || ! docker info &> /dev/null; then
     exit 1
 fi
 
-if [[ -z "$OPENAI_API_KEY" ]]; then
+if [[ -z "$OPENAI_API_KEY" || "$OPENAI_API_KEY" == "sk-***" ]]; then
     echo "OPENAI_API_KEY not set. Add to .env (or .env.production) or export it."
     exit 1
 fi
+# example.env ships the Claude key as a placeholder; never deploy it as a value.
+[[ "$ANTHROPIC_API_KEY" == "sk-***" ]] && ANTHROPIC_API_KEY=""
 
 PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2> /dev/null)}"
 if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
@@ -353,6 +356,15 @@ fi
 if [[ -n "$SLACK_SIGNING_SECRET" ]]; then
     put_secret slack-signing-secret "$SLACK_SIGNING_SECRET"
     SET_SECRETS="${SET_SECRETS},SLACK_SIGNING_SECRET=slack-signing-secret:latest"
+fi
+# Claude Engineer authenticates with one of these two; Codex uses OPENAI_API_KEY.
+if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+    put_secret anthropic-api-key "$ANTHROPIC_API_KEY"
+    SET_SECRETS="${SET_SECRETS},ANTHROPIC_API_KEY=anthropic-api-key:latest"
+fi
+if [[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then
+    put_secret claude-code-oauth-token "$CLAUDE_CODE_OAUTH_TOKEN"
+    SET_SECRETS="${SET_SECRETS},CLAUDE_CODE_OAUTH_TOKEN=claude-code-oauth-token:latest"
 fi
 echo -e "${DIM}Secrets stored + readable by ${RUNTIME_SA}${NC}"
 

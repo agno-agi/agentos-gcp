@@ -9,10 +9,12 @@
 #      ./scripts/gcp/env-sync.sh .env        # syncs .env instead
 #
 #    Reads the file and pushes every variable to the Cloud Run service in
-#    one update (one new revision). Secret-shaped keys (API keys, DB_PASS,
-#    JWT_VERIFICATION_KEY, MCP_CONNECT_SECRET, AGENTOS_MCP_SIGNING_KEY,
-#    Slack credentials) go to Secret Manager; the rest become plain env
-#    vars. Multi-line values (e.g. PEM-formatted JWT_VERIFICATION_KEY) are
+#    one update (one new revision). Secret-shaped keys (API keys and the
+#    Claude Engineer credentials, DB_PASS, JWT_VERIFICATION_KEY,
+#    MCP_CONNECT_SECRET, AGENTOS_MCP_SIGNING_KEY, Slack and AWS credentials)
+#    go to Secret Manager; the rest become plain env vars. AWS_PROFILE is
+#    skipped (host-only) and example.env's sk-*** placeholders never sync.
+#    Multi-line values (e.g. PEM-formatted JWT_VERIFICATION_KEY) are
 #    handled correctly.
 #
 #    Overrides: GCP_PROJECT_ID (default: current gcloud project),
@@ -60,7 +62,7 @@ RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 # Keys that must live in Secret Manager rather than plain env vars.
 is_secret_key() {
     case "$1" in
-        OPENAI_API_KEY|DB_PASS|JWT_VERIFICATION_KEY|MCP_CONNECT_SECRET|AGENTOS_MCP_SIGNING_KEY|PARALLEL_API_KEY|SLACK_BOT_TOKEN|SLACK_SIGNING_SECRET) return 0 ;;
+        OPENAI_API_KEY|ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|GITHUB_READ_TOKEN|DB_PASS|JWT_VERIFICATION_KEY|MCP_CONNECT_SECRET|AGENTOS_MCP_SIGNING_KEY|PARALLEL_API_KEY|SLACK_BOT_TOKEN|SLACK_SIGNING_SECRET) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -127,6 +129,31 @@ ${line}"
     current_value="${current_value%\"}"
     current_value="${current_value#\'}"
     current_value="${current_value%\'}"
+
+    case "$current_key" in
+        AWS_PROFILE)
+            # Names a profile on this machine; meaningless inside the container.
+            echo -e "${DIM}  Skipping AWS_PROFILE (host-only; give the service AWS credentials directly)${NC}"
+            current_key=""
+            current_value=""
+            continue
+            ;;
+        OPENAI_API_KEY)
+            if [[ -z "$current_value" || "$current_value" == "sk-***" ]]; then
+                echo "OPENAI_API_KEY not set in ${ENV_FILE} — refusing to sync a placeholder."
+                exit 1
+            fi
+            ;;
+        ANTHROPIC_API_KEY)
+            # example.env ships this as a placeholder; never deploy it as a value.
+            if [[ -z "$current_value" || "$current_value" == "sk-***" ]]; then
+                echo -e "${DIM}  Skipping ANTHROPIC_API_KEY (placeholder)${NC}"
+                current_key=""
+                current_value=""
+                continue
+            fi
+            ;;
+    esac
 
     if is_secret_key "$current_key"; then
         secret_name="$(secret_name_for "$current_key")"
