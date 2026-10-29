@@ -371,7 +371,7 @@ echo -e "${DIM}Secrets stored + readable by ${RUNTIME_SA}${NC}"
 # Non-secret env for the service. Direct VPC egress (network/subnet flags)
 # keeps the DB connection plain TCP to the private IP — db/url.py builds the
 # URL from these discrete DB_* vars.
-ENV_VARS="DB_HOST=${DB_PRIVATE_IP},DB_PORT=5432,DB_USER=ai,DB_DATABASE=ai,DB_DRIVER=postgresql+psycopg,WAIT_FOR_DB=True"
+ENV_VARS="SANDBOX_PROVIDER=agentcore,DB_HOST=${DB_PRIVATE_IP},DB_PORT=5432,DB_USER=ai,DB_DATABASE=ai,DB_DRIVER=postgresql+psycopg,WAIT_FOR_DB=True"
 [[ -n "$RUNTIME_ENV" ]] && ENV_VARS="${ENV_VARS},RUNTIME_ENV=${RUNTIME_ENV}"
 
 echo ""
