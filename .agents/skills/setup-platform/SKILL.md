@@ -1,70 +1,31 @@
 ---
 name: setup-platform
-description: Set up this AgentOS from a fresh clone — confirm Docker, configure .env, boot the containers, prove the MCP endpoint live, connect the AgentOS UI, then build the user's first agent. Use when the user asks to set up the platform, get started, or bring this repo up on a new machine.
+description: Set up this AgentOS from a fresh clone — confirm Docker, configure .env, start the containers, check the MCP endpoint, connect the AgentOS UI, then build the user's first agent. Use when the user asks to set up the platform, get started, or bring this repo up on a new machine.
 ---
 
 # Set Up the Platform
 
 > _Coding-agent workflow: run as `/setup-platform` or by describing the task._
 
-Take the user from a fresh clone to a running platform with their first agent live on it. Step 6 is the point of the trip; everything before it is setup, everything after is hand-over.
+Take the user from a fresh clone to a running platform with their first agent on it. Do
+everything you can yourself and stop only for what needs a person: a secret, an install or a
+sign-in. Never print secret values. Read [`AGENTS.md`](../../../AGENTS.md) first.
 
-**Be self-driving:** do anything you can do yourself (open a file, open a URL, launch an app). Stop only for what needs a human: a secret, an install, a sign-in. Never print or echo secret values.
+## 1. Start the platform
 
-**Narrate:** open with this map (tune the words, keep the shape), then a line per step.
+1. `docker info` must succeed. Start Docker if it is installed; give install steps if it is not.
+2. If `.env` is missing, `cp example.env .env`. Set `OPENAI_API_KEY`: copy it from the user's
+   shell without displaying it, or open `.env` in their editor (`code`, `cursor`) and ask them
+   to paste it. Do not open a terminal editor from your shell; it hangs the session.
+   After changing `.env` on a running stack, run `docker compose up -d agentos-api`.
+3. `docker compose up -d --build`, then wait for `http://localhost:8000/docs` to return 200.
+   The first build takes a few minutes. If it does not come up, read
+   `docker compose logs agentos-api`.
+4. `./scripts/mcp_check.sh` confirms the MCP endpoint and its tools without a model call.
 
-```text
-Kicking off /setup-platform. Here's the map:
+## 2. Connect the AgentOS UI
 
-1. Docker — confirm it's installed and running
-2. Environment — .env and your OpenAI key
-3. Boot — build and start the platform containers
-4. Prove it — MCP handshake and tools; an optional agent answer
-5. Connect the UI — os.agno.com, one click
-6. First agent — we build it together, live
-7. Make it yours — your platform in its own private repo
-8. The loop — the skills you own from here
-```
-
-## 0. Read the manual
-
-Read [`AGENTS.md`](../../../AGENTS.md) end to end.
-
-## 1. Docker
-
-`docker info` must succeed. Installed but not running → start it (`open -a Docker` on macOS) and poll. Not installed → stop and give install steps.
-
-## 2. Environment
-
-If `.env` does not exist, `cp example.env .env`, then set `OPENAI_API_KEY`:
-
-- Already in their shell → say so and copy it across without reading or printing it.
-- Otherwise open `.env` in their editor (`cursor`, `code`) and ask them to paste it. Never open a terminal editor from your shell — it hangs the session.
-
-## 3. Boot
-
-For standard development, `docker compose up -d --build`, then poll http://localhost:8000/docs until 200 (first build takes minutes). If it never comes up, read `docker compose logs agentos-api`.
-
-For sandbox development, follow the host API commands in the
-[sandbox setup guide](../../../docs/sandboxes.md#local-docker-sandbox).
-Select `docker_sandbox()` in `sandbox_provider()` and edit `REPOSITORY` in
-`app/sandbox.py` for the target repository and branch,
-and keep the Uvicorn process running in a persistent terminal. The host API
-uses Docker directly. Check `/health` and `/config`; Company should list its four tables,
-OS Manager, and the optional coding executors. Never start two APIs on the same port.
-The pinned framework admits sandbox HTTP runs through the durable PostgreSQL queue.
-Configuration and API startup do not prove execution: verify an engineer HTTP run and
-Company Task acceptance/completion separately. Keep the Product repository Source aligned
-with `REPOSITORY.url`; never bypass a framework rejection.
-For this host path use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh` below.
-
-## 4. Prove it
-
-`./scripts/mcp_check.sh` initializes MCP and verifies the required tools without a model call. For an answer, use `--prompt "<read-only prompt>"`; that spends model calls. Report which check was actually run.
-
-## 5. Connect the AgentOS UI
-
-Render the connection as a table, then one line of direction:
+Give the user this table:
 
 | Setting | Value |
 |---|---|
@@ -73,33 +34,19 @@ Render the connection as a table, then one line of direction:
 | Endpoint | `http://localhost:8000` |
 | Name | `Local AgentOS` |
 
-Most users arrive from the Agno onboarding with **Connect your OS** still open ("Awaiting connection"): tell them to flip back and hit **Connect OS**. Otherwise: sign in, **Connect OS**, fill the form from the table.
+If they came from Agno onboarding, **Connect OS** is already open. Otherwise they sign in and
+choose **Connect OS**. Suggest they open Super Agent and tell it what their company does.
+Do not wait for the click; go on to the first agent.
 
-Don't gate on the click and don't ask "connect or build first?" — bridge straight into Step 6 in the same message. This table is written before anything from Step 6.
+## 3. Build their first agent
 
-## 6. Build their first agent
+Ask "What would you like your first agent to do?" unless they already said. Then follow
+[`create-agent`](../create-agent/SKILL.md) with their answer.
 
-Below the connect direction, ask the one question that starts it — plain text, no structured choice control:
+## 4. Make it theirs
 
-> Now let's build your first agent. Do you have a product you'd like to build an agent for — or a product you use that you'd like an agent for? Give me its docs or website URL and I'll build an agent that answers questions about it from its own docs, ready to serve in your product, in claude.ai and ChatGPT, and over MCP.
->
-> Or if you have something else in mind — issue triage, release notes, your weekly update — say it in your own words and I'll build that instead.
-
-Whatever they type is the first discovery answer for [`create-agent`](../create-agent/SKILL.md): a URL or product name takes its **product-agent pattern** (Step 3 there); anything else takes its normal path. Close the message with the first build move, never with "ready?".
-
-**The product brief** you hand create-agent when they name a product — complete, so it builds without asking more: the product pattern (Step 3 there), first declare and register a dedicated `product_knowledge` in `app/registry.py` (none ships by default), then ingest with the framework `KnowledgeManagementTools(knowledge=product_knowledge).aingest_url` in the selected Compose or host runtime, initial page cap 50, `knowledge=product_knowledge`, `learning=shared_learning`, instructions you write that carry the grounding rules in create-agent's product pattern, no other tools; three smoke probes.
-
-Follow create-agent through its smoke test, then land where the agent now lives, in the same breath as its first answer:
-
-- **In the UI** — **Refresh** puts it in the Agents list, and its base on the Knowledge page.
-- **On OS Manager's roster** — registering in `app/main.py` lets OS Manager run it by name ("Agno, ask the <Product> agent…" through the `agno` MCP tool) from the UI, Slack, or any MCP client.
-- **Ready to serve** — REST inside their product and MCP now; claude.ai and ChatGPT once deployed (Step 8).
-
-Stop before create-agent's own closing — Steps 7 and 8 replace it. If they push back or want to stop, adapt and carry on.
-
-## 7. Make it yours
-
-`origin` still points at the public template. Offer a home of its own — a quick beat, not a gate:
+`origin` still points at the public template. Offer to move the work to their own private
+repository:
 
 ```sh
 git remote rename origin upstream    # the template stays connected for updates
@@ -107,16 +54,15 @@ git remote add origin <their-private-repo-url>
 git push -u origin main
 ```
 
-With `gh` signed in: `gh repo create agent-platform --private --source=. --push` after the rename. Otherwise point them at https://github.com/new (private) and run the add and push once they paste the URL. `git pull upstream main` brings template updates.
+With `gh` signed in, `gh repo create <name> --private --source=. --push` replaces the last two
+commands. `git pull upstream main` brings template updates later.
 
-## 8. Hand over the loop
+## 5. Hand over
 
-Short summary of what you built, then the loop they own — lead with whichever the smoke test suggested:
+Say what is running and what you verified. Then point to what comes next:
 
-- [`/extend-agent`](../extend-agent/SKILL.md) — change the agent: a tool, a capability, a known bug.
-- [`/eval-and-improve`](../eval-and-improve/SKILL.md) — repair failing cases or explore simulated user scenarios and improve the agent.
-- [`/create-agent`](../create-agent/SKILL.md) — another agent.
-
-One line: coding agents connect with `uvx agno connect`; claude.ai / ChatGPT connect over OAuth once deployed — [`/deploy-platform`](../deploy-platform/SKILL.md) does that.
-
-If the trip went smoothly, one more: the **Knowledge** page and the **shared notebook** ship empty and are theirs to fill.
+- [`/extend-agent`](../extend-agent/SKILL.md) to change an agent.
+- [`/improve`](../improve/SKILL.md) to harden one.
+- [`/deploy-platform`](../deploy-platform/SKILL.md) to put the platform in production.
+- Claude and Codex coding agents are off by default; [docs/harnesses.md](../../../docs/harnesses.md)
+  turns them on.

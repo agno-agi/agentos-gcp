@@ -1,33 +1,20 @@
-# AgentOS: The Agent Platform That Builds Itself
+# AgentOS: The self-managing agent platform
 
-AgentOS is a durable agent runtime that serves agents over API, MCP, and chat interfaces like Slack.
-Build agents for your product, your team, or yourself. Run them in your own cloud,
-keep their data in your own database, and manage them from [AgentOS](https://os.agno.com).
+AgentOS is an open-source agent platform that runs in your cloud. It comes with a **Super Agent** that builds agents, coordinates their work, and helps you manage the platform. Ask it to run an agent, create a workflow, or break a larger goal into Projects and Tasks.
 
-Built with [Agno](https://github.com/agno-agi/agno), this template gives you a working
-agent platform that you can run locally or deploy to Google Cloud Run.
+Built with [Agno](https://github.com/agno-agi/agno), AgentOS brings together:
 
-**Three ways to build agents.**
+- **Agents, teams, and workflows** you build in Python, Studio, or through Super Agent.
+- **Memory, knowledge, and storage** backed by your own PostgreSQL database.
+- **Permissions, human approvals, and scheduling** for managing work.
+- **An API and MCP server** to use your agents in products, Claude, and ChatGPT.
 
-1. **Use a coding agent.** Open the repo in Claude Code, Codex, or Cursor. The included
-   skills help it create, test, and improve your agents.
-2. **Describe what you need.** Chat with OS Manager, the built-in agent that helps you
-   manage the platform and build new agents.
-3. **Use Studio.** Build agents visually in [AgentOS Studio](https://os.agno.com).
-
-**Three ways to use your agents.**
-
-1. **In your product.** Call your agents through the REST API.
-2. **In AI apps.** Connect apps such as Claude and ChatGPT through MCP.
-3. **In Slack.** Connect a Slack app to talk to OS Manager from your workspace.
-
-The AgentOS UI lets you chat with your agents, review past conversations, and see
-the steps an agent took. Your PostgreSQL database stores conversations, memories,
-and Company work.
+Use the [AgentOS UI](https://os.agno.com) to chat with agents, inspect runs and traces,
+and track their work. This template runs locally with Docker and deploys to Google Cloud Run.
 
 ## Get started
 
-Copy this prompt into your coding agent:
+Give this prompt to your coding agent:
 
 ```text
 Help me set up my agent platform and build my first agent.
@@ -36,18 +23,12 @@ Clone https://github.com/agno-agi/agentos-gcp into a folder called agent-platfor
 cd into it, and follow .agents/skills/setup-platform/SKILL.md.
 ```
 
-It checks Docker, helps you add your API key, starts the platform, and walks you
-through building your first agent. Already cloned the repo? Ask your coding agent
-to follow [setup-platform](.agents/skills/setup-platform/SKILL.md) in that folder.
+It checks Docker, helps you configure your API key, starts the platform, and builds
+an agent with you. If you've already cloned the repo, ask it to run `/setup-platform`.
 
-Prefer to set it up yourself? Follow the steps below.
+### Or run it yourself
 
-## Run locally
-
-You'll need Git, Docker with Compose, and an OpenAI API key. Make sure Docker is running.
-Run the commands below in a terminal.
-
-### 1. Start the platform
+You'll need Git, Docker, and an OpenAI API key.
 
 ```sh
 git clone https://github.com/agno-agi/agentos-gcp agent-platform
@@ -55,111 +36,71 @@ cd agent-platform
 cp example.env .env
 ```
 
-Open `.env` and set `OPENAI_API_KEY`. Then start the platform:
+Set `OPENAI_API_KEY` in `.env`, then start the platform:
 
 ```sh
 docker compose up -d --build
 ```
 
-The first build can take a few minutes. When it's ready, open
-[http://localhost:8000/docs](http://localhost:8000/docs) to see the API.
+Once [localhost:8000/docs](http://localhost:8000/docs) loads:
 
-Check that AI apps can connect through MCP:
-
-```sh
-./scripts/mcp_check.sh
-```
-
-The check should report `9 tools; required tools available`.
-
-### 2. Connect the UI
-
-1. Open [os.agno.com](https://os.agno.com) and sign in.
+1. Sign in at [os.agno.com](https://os.agno.com).
 2. Choose **Connect OS**, select a local connection, and enter `http://localhost:8000`.
-3. Name it **Local AgentOS**, then open the chat for **OS Manager**.
+3. Open **Super Agent** and tell it what you're working on.
 
-### 3. Build your first agent
+## Put Super Agent to work
 
-Tell OS Manager what you want to build. For example:
+Start with a concrete request:
 
-> Help me build an agent that answers questions about my product. Here's the documentation URL: …
+> Build an agent that turns meeting notes into decisions and action items, then run it on these notes: …
 
-Review what it proposes, then ask it to build and publish the agent.
-Refresh the Agents list and try it out. You can chat with your new agent directly
-or ask OS Manager to run it for you.
+Super Agent can use your existing agents or build one for the job. Agents it builds
+appear in the Agents list and are available through the API and MCP.
 
-## Build and improve your agents
+For ongoing work, ask it to create a Project:
 
-You can keep working through OS Manager, use Studio, or edit Python files in this repo.
-The repo includes instructions, called skills, for common coding tasks.
-Ask your coding agent to follow the relevant skill:
+> Propose a Project to build a customer support agent. Break it into Tasks for my review.
 
-| What you want to do | Skill |
+The **Company** page keeps track of Products, Projects, Tasks, and scheduled Routines.
+You can approve work, assign it, review results, and request changes there or through
+Super Agent. Products describe ongoing responsibilities; Projects and Tasks organize
+specific work; Routines run on a schedule.
+
+This template includes a weekly maintenance Routine that reviews the platform for
+relevant Agno updates, security issues, and quality problems. It is **disabled by
+default**. Enable it from the Company page to receive proposals for review.
+
+## Skills
+
+This repo includes skills for building and managing your agent platform. Ask your
+coding agent to follow the relevant skill:
+
+| Task | Skill |
 | --- | --- |
 | Build an agent | [/create-agent](.agents/skills/create-agent/SKILL.md) |
-| Add a tool, change behavior, or fix a bug | [/extend-agent](.agents/skills/extend-agent/SKILL.md) |
-| Write tests for your agent's answers | [/create-evals](.agents/skills/create-evals/SKILL.md) |
-| Fix failing tests or try more scenarios | [/eval-and-improve](.agents/skills/eval-and-improve/SKILL.md) |
-| Check the repo before sharing or releasing it | [/review-and-improve](.agents/skills/review-and-improve/SKILL.md) |
+| Add tools, change behavior, or fix a bug | [/extend-agent](.agents/skills/extend-agent/SKILL.md) |
+| Write evals | [/create-evals](.agents/skills/create-evals/SKILL.md) |
+| Find weaknesses and improve reliability | [/improve](.agents/skills/improve/SKILL.md) |
+| Review the repository before release | [/review-and-improve](.agents/skills/review-and-improve/SKILL.md) |
 
-If you write an agent in Python, put it in `agents/` and add it to
-[app/main.py](app/main.py) so the platform can run it. Set its description and
-suggested prompts in [app/config.yaml](app/config.yaml). To make a tool or model
-available in Studio, add it to [app/registry.py](app/registry.py).
+## Coding agents
 
-You can give agents documents to search, a notebook to keep notes, and memory
-to remember each user. Keep a product's documentation in its own knowledge base,
-separate from the platform's documents.
+This repo comes with **Claude Code** and **Codex** agents. Work with them directly in AgentOS or ask Super Agent to delegate work to them.
 
-## Company
+They're **off by default**. Follow the [harness setup guide](docs/harnesses.md) to
+enable them and configure credentials and sandboxes.
 
-Company organizes ongoing work. A **Product** is what you're working on, a
-**Project** groups related work, and a **Task** is one piece of work to complete.
-A **Routine** is a set of instructions that can run on a schedule.
-
-This template includes an **AgentOS** Product for improving the platform itself.
-To get started, ask OS Manager:
-
-> Review this codebase and recent Agno releases. Suggest the most useful improvements.
-
-It also includes a daily review at **09:00 UTC**. Company Manager reads the code
-and Agno release notes, then proposes up to three Tasks for you to review.
-The review is instructed to suggest work and leave approval and execution to you.
-Automatic acceptance is off.
-
-Scheduled reviews use your model API keys and incur usage costs. Check the saved
-schedule and run history in Company to see when a review will run and what it did.
-
-[app/company.py](app/company.py) sets the initial review instructions and schedule.
-Once they're saved in the database, update the saved Routine to change them;
-editing the Python file alone won't change an existing Routine.
-
-## Engineers
-
-The platform includes **Claude Engineer** and **Codex Engineer**. They can read your
-code, make changes, and run commands.
-
-Chat with either engineer in AgentOS, or ask OS Manager to use one:
+Once enabled, ask Super Agent:
 
 > Ask Codex Engineer to review this project and suggest improvements. Don't change any files yet.
 
-Codex uses the `OPENAI_API_KEY` you added during setup. To use Claude, add
-`ANTHROPIC_API_KEY` to `.env`. After changing `.env`, run `docker compose up -d` again.
+Without a sandbox, engineers run on the API host with its file and credential access.
+[Sandboxes](docs/harnesses.md#sandboxes-and-checkpoints) provide isolated execution
+and checkpoint recovery.
 
-By default, engineers work in this project's folder. When running locally with
-Docker Compose, their file changes appear in your local checkout. Review those
-changes before committing them.
+## Make this platform yours
 
-You don't need to configure a sandbox or repository URL to get started.
-
-To have engineers work on a separate copy of your repository, follow the
-[sandbox setup guide](docs/sandboxes.md) for Docker or AWS AgentCore.
-
-## Make it yours
-
-To save your work in your own GitHub repository, create an empty private repo.
-From a fresh clone of this template, run the commands below with your repo URL.
-This makes `origin` your repo and keeps the original template as `upstream`:
+Create an empty private GitHub repository, then point this checkout at it:
 
 ```sh
 git remote rename origin upstream
@@ -167,143 +108,77 @@ git remote add origin https://github.com/YOUR-ORG/YOUR-REPO.git
 git push -u origin HEAD
 ```
 
-Future pushes go to your repository. You can still fetch updates from `upstream`
-and review them before merging.
-
-If you use sandboxes, also set the repository URL and branch in
-[the sandbox configuration](docs/sandboxes.md#choose-your-repository).
-
-<a id="deploy-in-production"></a>
+Your work now goes to your repository; `upstream` keeps the template available for
+updates. If you use sandboxes, also set your repository URL and branch in the
+[harness configuration](docs/harnesses.md#sandboxes-and-checkpoints).
 
 ## Deploy in production
 
-Ask your coding agent to follow [deploy-platform](.agents/skills/deploy-platform/SKILL.md),
-or use the steps below. For an existing deployment, read the [upgrade guide](docs/upgrading.md) first.
+Ask your coding agent to follow
+[/deploy-platform](.agents/skills/deploy-platform/SKILL.md). This template targets Google Cloud Run.
+You’ll need Google Cloud CLI (`gcloud auth login`), a project with billing enabled, Docker and OpenSSL.
 
-You'll need Google Cloud CLI with `gcloud auth login` completed, a project with billing enabled, Docker, and OpenSSL.
+Set `GCP_PROJECT_ID`. The scripts create Artifact Registry, Cloud SQL and Cloud Run. Keep at least one instance and CPU available between requests; the scheduler needs both.
 
-### 1. Set your production settings
-
-```sh
-[ -f .env.production ] || cp example.env .env.production
-```
-
-Add `OPENAI_API_KEY` and any other model keys you use, such as `ANTHROPIC_API_KEY`
-or `CLAUDE_CODE_OAUTH_TOKEN` for Claude Engineer. Keep `RUNTIME_ENV=prd` or leave
-it unset. The scripts read `.env.production` before `.env`; credential-shaped keys
-land in Secret Manager, the rest become plain environment variables.
-
-Set `GCP_PROJECT_ID` in `.env.production`, or select the project with `gcloud config set project YOUR_PROJECT_ID`. Keep one service instance; the scheduler runs inside the API.
-
-### 2. Deploy and set up authentication
-
-Creates Artifact Registry, Cloud SQL PostgreSQL and a Cloud Run service. The service keeps a minimum of one instance and CPU available between requests so scheduled jobs can run.
+Create `.env.production` from [example.env](example.env) if absent. Set `OPENAI_API_KEY`
+and any other model credentials you need. Keep `RUNTIME_ENV=prd` or leave it unset.
 
 ```sh
 ./scripts/gcp/up.sh
 ```
 
-This creates or uses billed resources. Keep one API instance so scheduled work
-runs once. When the script shows the public URL and asks for a verification key:
+When setup provides the HTTPS URL, connect it as a **Live** connection at
+[os.agno.com](https://os.agno.com). Enable JWT authorization in **Settings → OS Security**
+and supply the public verification key. If the prompt was skipped, save the full quoted
+multiline `JWT_VERIFICATION_KEY` in `.env.production`, then run
+`./scripts/gcp/env-sync.sh`. The API requires the key to start in production.
 
-1. Open [os.agno.com](https://os.agno.com), choose **Connect OS**, and select **Live**.
-2. Enter the public URL and enable token-based authorization.
-3. Copy the full public verification key into the script's prompt.
+Use `./scripts/gcp/redeploy.sh` for code and `./scripts/gcp/env-sync.sh` for settings.
 
-The script saves the key and connection settings in `.env.production`. If you
-skipped the prompt, save the quoted `JWT_VERIFICATION_KEY` there and run
-`./scripts/gcp/env-sync.sh` to finish. Production requires a valid token
-to access agents and data.
+Keep `AGENTOS_URL` set to the public HTTPS URL for scheduling and MCP OAuth. Verify
+`/health`, an authenticated UI connection, and rejection of anonymous `/agents` requests.
+Run one API instance and read [scaling](docs/scaling.md) before adding replicas.
+For optional hosted sandboxes, follow [harness setup](docs/harnesses.md) and preserve
+`SANDBOX_PROVIDER=agentcore` plus the required AWS credentials, runtime and S3 settings.
 
-### 3. Check the deployment
+## Connect to Claude, ChatGPT, and coding clients
 
-Open `/health` and `/docs` on your public URL, then connect through the AgentOS UI.
-Check that `/agents` rejects requests without a token and works with a valid token.
+For MCP clients like Claude and ChatGPT, set `MCP_CONNECT_SECRET` to a random secret in your production environment and apply it with the settings update command above. Connect the client to `https://YOUR-DOMAIN/mcp` and enter the secret on
+the consent page.
 
-View logs with:
-
-```sh
-gcloud run services logs read agent-os --region YOUR_REGION
-```
-
-### Connect your AI apps
-
-Use your public URL followed by `/mcp` as the connector URL in an AI app.
-When prompted, enter the `MCP_CONNECT_SECRET` saved in your production env file.
-For a supported coding client, run:
+For supported coding clients:
 
 ```sh
 uvx agno connect --url https://YOUR-DOMAIN
 ```
 
-Try asking OS Manager about the platform to check that the connection works.
+## Local development
 
-### Update or remove the deployment
-
-| What you want to do | Command |
-| --- | --- |
-| Deploy code changes | `./scripts/gcp/redeploy.sh` |
-| Upload production settings | `./scripts/gcp/env-sync.sh` |
-| Remove the deployment | `./scripts/gcp/down.sh` |
-
-Deletes the managed Cloud Run service, database and related resources created by the scripts. Review the resources listed before confirming deletion.
-
-### Sandbox storage
-
-Local Docker sandbox instructions are in the [sandbox guide](docs/sandboxes.md).
-The production deployment does not attach sandbox checkpoint storage. Before
-enabling AWS AgentCore, add a Cloud Run volume mounted at `/data` (a Filestore
-NFS share, or a Cloud Storage bucket through the Cloud Storage FUSE volume type)
-with `gcloud run services update --add-volume` and `--add-volume-mount`, and put
-the AWS credentials AgentCore needs in `.env.production` so the sync stores them
-as secrets. If you skip the mount, leave AgentCore disabled. Keep one API instance.
-
-## Verify and develop
-
-To check your Python code and test agent responses, install [uv](https://docs.astral.sh/uv/)
-and run these commands from the project folder. Keep the local platform running.
-If another Python environment is active, run `deactivate` first.
+Install [uv](https://docs.astral.sh/uv/), then create and activate a virtual environment
+from the repository root. If another environment is active, run `deactivate` first.
 
 ```sh
 ./scripts/venv_setup.sh
 source .venv/bin/activate
+```
+
+The setup script installs the application and development dependencies into `.venv`.
+After making changes, format your code and check formatting, lint, and types:
+
+```sh
+./scripts/format.sh
 ./scripts/validate.sh
+```
+
+With PostgreSQL running, test Super Agent with the smoke evals. These spend model
+calls and save results in the database:
+
+```sh
 python -m evals --tag smoke
 ```
 
-`validate.sh` checks Python formatting, lint rules, and types. The smoke tests ask
-OS Manager to explain setup, check platform health, and explain agent memory.
-They use your model API keys and save results in the database for review in the UI.
-PostgreSQL must be running, even when you only want to list the tests.
+Add cases in [evals/cases.py](evals/cases.py). Use `./scripts/mcp_check.sh` to check
+the running MCP server without a model call.
 
-Add your own cases in [evals/cases.py](evals/cases.py), or use
-[/create-evals](.agents/skills/create-evals/SKILL.md). To save a report, add
-`--json-output tmp/evals.json`. To run one case, use `--name CASE_NAME`.
-Evals use your application's database and workspace; agents can call tools during a test.
-
-Change dependencies in `pyproject.toml`, then run `./scripts/generate_requirements.sh`.
-Commit the updated `requirements.txt` and rebuild the API and any sandbox image you use.
-See [AGENTS.md](AGENTS.md) for the code layout and development conventions.
-
-## Configuration
-
-[example.env](example.env) shows the main settings. Start with `OPENAI_API_KEY`;
-add the others when you need them. Use `.env` locally and `.env.production` for deployment.
-
-| Setting | What it's for |
-| --- | --- |
-| `OPENAI_API_KEY` | OS Manager, embeddings, and Codex Engineer. |
-| `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` | Claude Engineer. |
-| `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` | Connect OS Manager to Slack. Set both. |
-| `PARALLEL_API_KEY` | Optional web search key. Without it, search uses Parallel's MCP server without an API key. |
-| `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE` | Check login tokens in production. A JWKS file must be available on the server. |
-| `AGENTOS_URL` | Public URL used by scheduled jobs and MCP. Deployment scripts save it for you. |
-| `MCP_CONNECT_SECRET` | Connect browser MCP clients. Deployment scripts generate it for you. |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_DATABASE` | PostgreSQL connection settings. Local Compose configures these for you. |
-| `RUNTIME_ENV` | `prd` by default. Local Compose uses `dev`, which disables token checks. |
-
-## Learn more
-
-- [Agno documentation](https://docs.agno.com)
-- [Agno on GitHub](https://github.com/agno-agi/agno)
-- [AgentOS UI](https://os.agno.com)
+See [AGENTS.md](AGENTS.md) for development conventions and
+[Agno documentation](https://docs.agno.com) for framework guides.
