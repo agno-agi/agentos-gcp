@@ -1,7 +1,7 @@
 [project]
-name = "AgentOS"
+name = "agentos-gcp"
 version = "1.0.0"
-description = "AgentOS: a self-improving agent platform"
+description = "AgentOS: a production runtime for agents. Google Cloud sibling of the agentos template family."
 requires-python = ">=3.14,<4"
 readme = "README.md"
 license-files = ["LICENSE"]
