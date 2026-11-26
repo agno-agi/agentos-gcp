@@ -143,9 +143,11 @@ For optional hosted sandboxes, follow [harness setup](docs/harnesses.md) and pre
 
 ## User roles and Slack
 
-The template follows the [roles and default-role cookbook](https://github.com/agno-agi/agno/blob/cac99469ffed5ffe58d18ae7f16210ed346400b5/cookbook/05_agent_os/26_authorization/16_roles_and_default_role.py).
-Agno is pinned to the merged revision of [PR #11866](https://github.com/agno-agi/agno/pull/11866)
-on the 3.3 release branch, rather than a published release.
+The template follows the [roles and default-role cookbook](https://github.com/agno-agi/agno/blob/7c0ba1863432aed2afbb384f8f4e77f77f754ce7/cookbook/05_agent_os/26_authorization/16_roles_and_default_role.py).
+Agno is pinned to commit `7c0ba1863432aed2afbb384f8f4e77f77f754ce7` from the
+`release-3.3` branch in [release PR #11877](https://github.com/agno-agi/agno/pull/11877),
+including the role flow from [PR #11866](https://github.com/agno-agi/agno/pull/11866).
+This is a revision for release testing, rather than a published release.
 
 In production, `Authorization` defines two editable OS roles:
 
