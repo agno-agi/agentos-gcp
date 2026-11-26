@@ -141,6 +141,40 @@ Run one API instance and read [scaling](docs/scaling.md) before adding replicas.
 For optional hosted sandboxes, follow [harness setup](docs/harnesses.md) and preserve
 `SANDBOX_PROVIDER=agentcore` plus the required AWS credentials, runtime and S3 settings.
 
+## User roles and Slack
+
+The template follows the [roles and default-role cookbook](https://github.com/agno-agi/agno/blob/cac99469ffed5ffe58d18ae7f16210ed346400b5/cookbook/05_agent_os/26_authorization/16_roles_and_default_role.py).
+Agno is pinned to the merged revision of [PR #11866](https://github.com/agno-agi/agno/pull/11866)
+on the 3.3 release branch, rather than a published release.
+
+In production, `Authorization` defines two editable OS roles:
+
+- **Member** is the default: `READ + RUN` for ordinary agents, teams and workflows.
+  Broad run scopes do not grant access to Super Agent, Platform Builder or Mini Agent.
+- **Platform** adds `PLATFORM`, including access to those built-ins and Company tools.
+  It does not grant `agent_os:admin`.
+
+With `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` configured, Slack uses
+`authorize_senders=True` and `resolve_user_identity=True`. A sender's confirmed Slack
+email is their directory id, matching their web JWT subject. Their first web request or
+Slack message creates a user with Member. Admin-created users also get the default role.
+
+To test, open **User Management > End Users** in the AgentOS UI:
+
+1. Confirm the user's OS role is Member. A Slack request to Super Agent is refused.
+2. Assign Platform and retry. The next Slack message uses the updated role.
+3. Assign Member again to revoke platform access, or disable the user to block access.
+
+Web/API requests also trust signed JWT scopes: permission from the token or the stored
+OS role can allow access. An organization-admin token can therefore allow Super Agent
+in the UI while the same user's OS Member role blocks Slack. Organization roles and
+OS roles are separate; changes are not automatically copied between them.
+
+Existing saved role scopes and explicit user assignments survive restarts. Update a
+previously customized Member role through the UI or `/authz` API if it should match
+the new scope bundle. This update does not reset the database. Development mode
+(`RUNTIME_ENV=dev`) keeps authorization disabled.
+
 ## Connect to Claude, ChatGPT, and coding clients
 
 For MCP clients like Claude and ChatGPT, set `MCP_CONNECT_SECRET` to a random secret in your production environment and apply it with the settings update command above. Connect the client to `https://YOUR-DOMAIN/mcp` and enter the secret on

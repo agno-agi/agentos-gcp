@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agno.job_queue import QueueConfig
 from agno.os import AgentOS, CompanyConfig, OSManager
+from agno.os.authz import PLATFORM, READ, RUN, Authorization, Role, UserDirectory
 
 # from agents.engineers import create_claude_engineer
 # from agents.engineers import create_codex_engineer
@@ -22,16 +23,20 @@ agentos_url = getenv("AGENTOS_URL", "http://127.0.0.1:8000")
 agentos_root = Path(__file__).resolve().parent.parent
 db = get_postgres_db()
 
+# New users can run ordinary components; an admin grants platform access separately.
+member = Role("member", scopes=[*READ, *RUN], name="Member")
+platform = Role("platform", scopes=[*READ, *RUN, *PLATFORM], name="Platform")
+
 agent_os = AgentOS(
     db=db,
     mcp=True,
     tracing=True,
     scheduler=True,
     user_isolation=True,
-    user_directory=True,
+    user_directory=UserDirectory(default_role=member),
     scheduler_base_url=agentos_url,
     mcp_auth=mcp_auth(agentos_url),
-    authorization=runtime_env != "dev",
+    authorization=Authorization(roles=[member, platform]) if runtime_env != "dev" else False,
     manager=OSManager(
         root=agentos_root,
         model=super_agent_model(),
