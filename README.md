@@ -61,9 +61,9 @@ For ongoing work, ask it to create a Project:
 
 > Propose a Project to build a customer support agent. Break it into Tasks for my review.
 
-The **Company** page keeps track of Products, Projects, Tasks, and scheduled Routines.
+The **Company** page keeps track of Goals, Projects, Tasks, and scheduled Routines.
 You can approve work, assign it, review results, and request changes there or through
-Super Agent. Products describe ongoing responsibilities; Projects and Tasks organize
+Super Agent. Goals describe ongoing responsibilities; Projects and Tasks organize
 specific work; Routines run on a schedule.
 
 This template includes a weekly maintenance Routine that reviews the platform for
@@ -140,6 +140,66 @@ Keep `AGENTOS_URL` set to the public HTTPS URL for scheduling and MCP OAuth. Ver
 Run one API instance and read [scaling](docs/scaling.md) before adding replicas.
 For optional hosted sandboxes, follow [harness setup](docs/harnesses.md) and preserve
 `SANDBOX_PROVIDER=agentcore` plus the required AWS credentials, runtime and S3 settings.
+
+## Upgrade an existing deployment to 3.3
+
+Back up the database before upgrading. Agno 3.3 renames Company Products to Goals
+and migrates Company files. Deploy the updated image, then call
+`POST /databases/all/migrate` once with an authenticated OS administrator token.
+The API can answer `/health` while Company reports that migration is required;
+a healthy API alone does not confirm the upgrade is complete. Company becomes
+available after a successful migration without restarting the API.
+
+Verify `/company/goals` and your existing Projects, Tasks, notes and Routines after
+migration. Keep existing database settings and record IDs; do not reset the database.
+A fresh database provisions the new schema automatically.
+Existing `products:*` permissions remain valid as aliases for `goals:*`; saved
+role customizations and user assignments are retained.
+
+Saved declarations keep their later edits. Review the saved maintenance Routine in
+the UI if its instructions still use Product terminology; changing the declaration
+in `app/company.py` does not replace saved instructions.
+
+Super Agent and Company use `gpt-6.1-terra`; the shared default model and Studio
+registry retain `gpt-6.1-sol`.
+
+## User roles and Slack
+
+The template follows the [roles and default-role cookbook](https://github.com/agno-agi/agno/blob/de92e096caa37b02b18aa500e58bb55035093351/cookbook/05_agent_os/26_authorization/16_roles_and_default_role.py).
+Agno is pinned to candidate commit `de92e096caa37b02b18aa500e58bb55035093351`,
+the SDK revision used by [the Render 3.3 template](https://github.com/agno-agi/agentos-render/pull/22).
+It combines the [3.3 release work](https://github.com/agno-agi/agno/pull/11877) with
+newer Company and Super Agent updates, including the role flow from
+[PR #11866](https://github.com/agno-agi/agno/pull/11866). This is a revision for release
+testing, rather than a published release.
+
+In production, `Authorization` defines two editable OS roles:
+
+- **Member** is the default: `READ + RUN` for ordinary agents, teams and workflows.
+  Broad run scopes do not grant access to Super Agent, Platform Builder or Mini Agent.
+- **Platform** adds `PLATFORM`, including access to those built-ins and Company tools.
+  It does not grant `agent_os:admin`.
+
+With `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` configured, Slack uses
+`authorize_senders=True` and `resolve_user_identity=True`. A sender's confirmed Slack
+email is their directory id, matching their web JWT subject. Their first web request or
+Slack message creates a user with Member. Admin-created users also get the default role.
+
+To test, open **User Management > End Users** in the AgentOS UI:
+
+1. Confirm the user's OS role is Member. A Slack request to Super Agent is refused.
+2. Assign Platform and retry. The next Slack message uses the updated role.
+3. Assign Member again to revoke platform access, or disable the user to block access.
+
+Web/API requests also trust signed JWT scopes: permission from the token or the stored
+OS role can allow access. An organization-admin token can therefore allow Super Agent
+in the UI while the same user's OS Member role blocks Slack. Organization roles and
+OS roles are separate; changes are not automatically copied between them.
+
+Existing saved role scopes and explicit user assignments survive restarts. Update a
+previously customized Member role through the UI or `/authz` API if it should match
+the new scope bundle. This update does not reset the database. Development mode
+(`RUNTIME_ENV=dev`) keeps authorization disabled.
 
 ## Connect to Claude, ChatGPT, and coding clients
 
